@@ -11,9 +11,10 @@ try{session=JSON.parse(sessionStorage.getItem('mom-english:session'));if(session
 const persist=()=>{try{sessionStorage.setItem('mom-english:session',JSON.stringify(session))}catch{}};
 const get=id=>catalog.find(e=>e.id===id);
 const shuffle=items=>{const a=[...items];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
-const menus=[['today','오늘의 복습','짧게 배우고, 가볍게 확인해요'],['expressions','외래어·헷갈리는 영어','한국에서 쓰는 말과 실제 영어'],['words','단어 복습','익숙한 단어부터 10개씩'],['daily','생활영어 복습','짧은 표현을 다시 익혀요'],['patterns','패턴영어 복습','문장 틀에 말을 바꿔 넣어 연습해요'],['speaking','말하기 연습','듣고, 천천히 따라 말해요'],['mixed','종합 복습','배운 단어와 표현을 함께'],['saved','즐겨찾기 / 틀린 것 복습','다시 보고 싶은 내용을 모아서']];
+const menus=[['today','오늘의 복습','짧게 배우고, 가볍게 확인해요'],['expressions','외래어·헷갈리는 영어','한국에서 쓰는 말과 실제 영어'],['words','단어 복습','익숙한 단어부터 10개씩'],['daily','생활영어 복습','짧은 표현을 다시 익혀요'],['patterns','패턴영어 복습','문장 틀에 말을 바꿔 넣어 연습해요'],['reading','영어 읽기 연습','표지판·브랜드·자동차·생활 단어를 읽어봐요'],['speaking','말하기 연습','듣고, 천천히 따라 말해요'],['mixed','종합 복습','배운 단어와 표현을 함께'],['saved','즐겨찾기 / 틀린 것 복습','다시 보고 싶은 내용을 모아서']];
 const names=Object.fromEntries(menus.map(([id,name])=>[id,name]));
 const patternGroups=window.MOM_PATTERN_GROUPS||[];
+const readingGroups=window.MOM_READING_GROUPS||[];
 const arrow='<span class="chevron" aria-hidden="true"></span>';
 const row=(href,title,desc='',i=null)=>`<a class="row" href="${href}">${i===null?'':`<span class="number">${String(i+1).padStart(2,'0')}</span>`}<span><span class="row-title">${escapeHTML(title)}</span>${desc?`<span class="row-desc">${escapeHTML(desc)}</span>`:''}</span>${arrow}</a>`;
 const header=(title,back='#menu')=>`<div class="top"><a class="back" href="${back}" aria-label="뒤로">${arrow}</a></div><h1>${escapeHTML(title)}</h1>`;
@@ -26,12 +27,14 @@ function pool(scope){
  if(scope==='daily'||scope==='speaking')return catalog.filter(e=>e.type==='phrase');
  if(scope.startsWith('patterns:'))return catalog.filter(e=>e.type==='pattern'&&e.category===scope.split(':')[1]);
  if(scope==='patterns')return catalog.filter(e=>e.type==='pattern');
+ if(scope.startsWith('reading:'))return catalog.filter(e=>(e.readingCategories||[]).includes(scope.split(':')[1]));
+ if(scope==='reading')return catalog.filter(e=>(e.readingCategories||[]).length);
  if(scope==='expressions')return catalog.filter(e=>e.type==='expression');
  if(scope==='favorites')return catalog.filter(e=>favorites.includes(e.id));
  if(scope==='wrong')return catalog.filter(e=>progress[e.id]?.wrong);
  if(scope==='mixed')return catalog.filter(e=>progress[e.id]?.seen);
  if(scope==='recent')return recent.map(get).filter(Boolean);
- if(scope==='today')return catalog.filter(e=>e.type!=='pattern');
+ if(scope==='today')return catalog.filter(e=>e.type!=='pattern'&&e.type!=='reading');
  return [];
 }
 function selectBatch(items){
@@ -74,14 +77,20 @@ utterance.onerror=()=>status('음성을 재생하지 못했어요. 다시 눌러
  window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);
 }
 function status(message){const el=$('#speech-status');if(el)el.textContent=message}
-function card(e){return `<article class="study-card"><button class="star" data-favorite="${escapeHTML(e.id)}" aria-label="즐겨찾기 ${favorites.includes(e.id)?'해제':'추가'}" aria-pressed="${favorites.includes(e.id)}">${icon('star')}</button>${e.type==='pattern'&&e.pattern?`<p class="muted">패턴: ${escapeHTML(e.pattern)}</p>`:e.koreanUsage?`<p class="muted">한국에서: ${escapeHTML(e.koreanUsage)}</p>`:''}<button class="speak-word" data-speak="${escapeHTML(e.id)}" lang="en" aria-label="${escapeHTML(e.english)} 발음 듣기">${escapeHTML(e.english)}<span aria-hidden="true"> ♪</span></button><p class="translation">${escapeHTML(e.korean)}</p>${e.type==='pattern'&&e.tip?`<p class="muted">${escapeHTML(e.tip)}</p>`:e.difference?`<p class="muted">${escapeHTML(e.difference)}</p>`:''}${e.source||e.lessonTag?`<p class="small-note">${escapeHTML([e.source,e.lessonTag].filter(Boolean).join(' · '))}</p>`:''}</article>`}
+function card(e){
+ const readingMode=session?.scope?.startsWith('reading:');
+ const source=readingMode?(e.readingSource||e.source):(e.source||'');
+ const lessonTag=readingMode?(e.readingLessonTag||e.lessonTag):(e.lessonTag||'');
+ return `<article class="study-card"><button class="star" data-favorite="${escapeHTML(e.id)}" aria-label="즐겨찾기 ${favorites.includes(e.id)?'해제':'추가'}" aria-pressed="${favorites.includes(e.id)}">${icon('star')}</button>${e.type==='pattern'&&e.pattern?`<p class="muted">패턴: ${escapeHTML(e.pattern)}</p>`:e.koreanUsage?`<p class="muted">한국에서: ${escapeHTML(e.koreanUsage)}</p>`:''}<button class="speak-word" data-speak="${escapeHTML(e.id)}" lang="en" aria-label="${escapeHTML(e.english)} 발음 듣기">${escapeHTML(e.english)}<span aria-hidden="true"> ♪</span></button><p class="translation">${escapeHTML(e.korean)}</p>${e.type==='pattern'&&e.tip?`<p class="muted">${escapeHTML(e.tip)}</p>`:e.difference?`<p class="muted">${escapeHTML(e.difference)}</p>`:''}${source||lessonTag?`<p class="small-note">${escapeHTML([source,lessonTag].filter(Boolean).join(' · '))}</p>`:''}</article>`;
+}
 function testStart(mode){
  if(!session?.ids.length)return;
  const answerKey=mode==='en-ko'?'korean':'english';
  session.mode=mode;session.index=0;session.answers=[];session.feedback=null;
  session.questions=shuffle(session.ids).map(id=>{
   const e=get(id),answer=e[answerKey];
-  const candidates=shuffle(catalog.filter(x=>x.type===e.type)).concat(shuffle(catalog));
+  const scoped=session.scope?.startsWith('reading:')?pool(session.scope):catalog.filter(x=>x.type===e.type);
+  const candidates=shuffle(scoped).concat(shuffle(catalog));
   const distractors=[...new Set(candidates.filter(x=>x[answerKey]!==answer&&x.english!==e.english&&x.korean!==e.korean).map(x=>x[answerKey]))].slice(0,3);
   return {id,answer,options:shuffle([answer,...distractors])};
  });persist();go('test');
@@ -108,6 +117,7 @@ function render(){
   if(scope==='words')html+=`<div class="list">${wordCategories.map(([id,name],i)=>row('#category/words:'+id,name,`${pool('words:'+id).length}개 · 한 번에 10개`,i)).join('')}</div>`;
   else if(scope==='expressions')html+=`<p class="muted">한국에서 쓰는 표현과 실제 영어의 차이를 배워요.</p><div class="list">${[['loanwords','생활 속 외래어'],['konglish','콩글리시와 실제 영어'],['confusing','헷갈리는 영어 표현']].map(([id,name],i)=>row('#category/expressions:'+id,name,`${pool('expressions:'+id).length}개`,i)).join('')}</div>`;
   else if(scope==='patterns')html+=`<p class="muted">문장 하나를 외우기보다 같은 틀에 말을 바꿔 넣어 연습해요.</p><div class="list">${patternGroups.map((g,i)=>row('#category/patterns:'+g.id,g.title,`${g.template} · ${pool('patterns:'+g.id).length}문장`,i)).join('')}</div>`;
+  else if(scope==='reading')html+=`<p class="muted">길이나 가게에서 실제로 보이는 영어를 읽는 연습이에요.</p><div class="list">${readingGroups.map((g,i)=>row('#category/reading:'+g.id,g.title,`${g.desc} · ${pool('reading:'+g.id).length}개`,i)).join('')}</div>`;
   else{
    const items=pool(scope),wordCategory=wordCategories.find(([id])=>'words:'+id===scope);
    if(wordCategory)html=header(wordCategory[1],'#category/words');
@@ -115,6 +125,10 @@ function render(){
    if(scope.startsWith('patterns:')){
     const g=patternGroups.find(x=>'patterns:'+x.id===scope);
     html=header(g?.title||'패턴영어 복습','#category/patterns')+`<p class="muted">${escapeHTML(g?.template||'')}<br>${escapeHTML(g?.meaning||'')}</p>`;
+   }
+   if(scope.startsWith('reading:')){
+    const g=readingGroups.find(x=>'reading:'+x.id===scope);
+    html=header(g?.title||'영어 읽기 연습','#category/reading')+`<p class="muted">${escapeHTML(g?.desc||'')}</p>`;
    }
    if(!items.length)html+=empty(scope==='mixed'?'먼저 학습한 내용을 모아 복습해요':scope==='wrong'?'틀린 항목이 없어요':'학습 내용을 준비하고 있어요',scope==='mixed'?'단어나 생활영어를 학습하면 종합 복습에 모여요.':'내용이 준비되면 학습 → 테스트 → 오답 복습으로 이어져요.');
    else html+=`<p class="muted">${items.length}개 중 ${Math.min(10,items.length)}개씩 ${scope==='speaking'?'듣고 따라 말해요.':'먼저 익힌 뒤 테스트해요.'}</p><button class="primary" data-begin="${escapeHTML(scope)}">학습하기</button><p class="small-note">${scope==='mixed'?'이미 학습한 단어와 표현을 함께 복습해요.':'아직 안 본 내용을 먼저, 그다음 틀린 것과 오래 안 본 내용을 복습해요.'}</p>`;
