@@ -35,7 +35,7 @@ function pool(scope){
  if(scope==='favorites')return catalog.filter(e=>favorites.includes(e.id));
  if(scope==='wrong')return catalog.filter(e=>progress[e.id]?.wrong);
  if(scope==='mixed')return catalog.filter(e=>progress[e.id]?.seen&&!progress[e.id]?.wrong);
- if(scope==='recent')return recent.map(get).filter(Boolean);
+ if(scope==='recent')return recent.map(get).filter(e=>e&&!progress[e.id]?.wrong);
  if(scope==='today')return catalog.filter(e=>e.type!=='pattern'&&e.type!=='reading');
  return [];
 }
