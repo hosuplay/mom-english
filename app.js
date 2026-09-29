@@ -34,48 +34,75 @@ function pool(scope){
  if(scope==='expressions')return catalog.filter(e=>e.type==='expression');
  if(scope==='favorites')return catalog.filter(e=>favorites.includes(e.id));
  if(scope==='wrong')return catalog.filter(e=>progress[e.id]?.wrong);
- if(scope==='mixed')return catalog.filter(e=>progress[e.id]?.seen);
+ if(scope==='mixed')return catalog.filter(e=>progress[e.id]?.seen&&!progress[e.id]?.wrong);
  if(scope==='recent')return recent.map(get).filter(Boolean);
  if(scope==='today')return catalog.filter(e=>e.type!=='pattern'&&e.type!=='reading');
  return [];
 }
-function selectBatch(items){
+const reviewScopes=new Set(['wrong','favorites','recent','mixed']);
+function selectBatch(items,scope){
+ const previous=new Set(session?.ids||[]);
+ if(!reviewScopes.has(scope)){
+  const unseen=shuffle(items.filter(e=>!progress[e.id]?.seen));
+  return unseen.slice(0,10);
+ }
  const ranked=shuffle(items).sort((a,b)=>{
   const x=progress[a.id]||{},y=progress[b.id]||{};
-  if(!x.seen!==!y.seen)return x.seen?1:-1;
-  if(!x.seen)return 0;
-  if(!!x.wrong!==!!y.wrong)return x.wrong?-1:1;
   return (x.lastSeen||0)-(y.lastSeen||0);
  });
- // Prefer another batch when enough items exist, while keeping unseen items first.
- const previous=new Set(session?.ids||[]);
- const unseen=ranked.filter(e=>!progress[e.id]?.seen);
- const remainder=ranked.filter(e=>progress[e.id]?.seen);
- const fresh=remainder.filter(e=>!previous.has(e.id));
- const repeat=remainder.filter(e=>previous.has(e.id));
- return shuffle([...unseen,...fresh,...repeat].slice(0,10));
+ const fresh=ranked.filter(e=>!previous.has(e.id));
+ const repeat=ranked.filter(e=>previous.has(e.id));
+ return [...fresh,...repeat].slice(0,10);
 }
 function go(route){if(location.hash==='#'+route)render();else location.hash=route}
 function begin(scope,ids){
- const items=ids?ids.map(get).filter(Boolean).slice(0,10):selectBatch(pool(scope));
+ const items=ids?ids.map(get).filter(Boolean).slice(0,10):selectBatch(pool(scope),scope);
  session={scope,ids:items.map(e=>e.id),answers:[],index:0,mode:null,questions:[],feedback:null};
  const now=Date.now();items.forEach(e=>{progress[e.id]={...progress[e.id],seen:true,lastSeen:now};recent=[e.id,...recent.filter(id=>id!==e.id)].slice(0,30)});
  save('progress',progress);save('recent',recent);persist();go('study');
 }
-function speak(id){
+let voiceCache=[];
+function refreshVoices(){
+ if(!('speechSynthesis'in window))return [];
+ const voices=window.speechSynthesis.getVoices()||[];
+ if(voices.length)voiceCache=voices;
+ return voiceCache;
+}
+function preferredEnglishVoice(){
+ const voices=refreshVoices();
+ return voices.find(v=>v.name==='Samantha')
+  ||voices.find(v=>/Google US English/i.test(v.name))
+  ||voices.find(v=>/(Aria|Jenny|Ava|Allison|Sandy|Shelley|Flo)/i.test(v.name)&&/^en-US\b/i.test(v.lang))
+  ||voices.find(v=>/^en-US\b/i.test(v.lang))
+  ||voices.find(v=>/^en\b/i.test(v.lang));
+}
+if('speechSynthesis'in window){
+ refreshVoices();
+ window.speechSynthesis.addEventListener?.('voiceschanged',refreshVoices);
+}
+async function speak(id){
  const e=get(id);if(!e)return;
  if(!('speechSynthesis'in window)){status('이 브라우저에서는 음성 재생을 지원하지 않아요.');return}
+ let preferred=preferredEnglishVoice();
+ if(!preferred){
+  await new Promise(resolve=>{
+   let done=false;
+   const finish=()=>{if(done)return;done=true;window.speechSynthesis.removeEventListener?.('voiceschanged',finish);resolve()};
+   window.speechSynthesis.addEventListener?.('voiceschanged',finish,{once:true});
+   setTimeout(finish,700);
+  });
+  preferred=preferredEnglishVoice();
+ }
+ if(!preferred){
+  status('영어 원어민 음성을 불러오는 중이에요. 잠시 후 다시 눌러주세요.');
+  return;
+ }
  const utterance=new SpeechSynthesisUtterance(e.english);
-utterance.lang='en-US';
-utterance.rate=.90;
-utterance.pitch=1;
-const voices=window.speechSynthesis.getVoices();
-const preferred=
-  voices.find(v=>v.name==='Samantha')
-  ||voices.find(v=>/Google US English/i.test(v.name))
-  ||voices.find(v=>/(Aria|Jenny|Ava|Allison|Sandy|Shelley|Flo)/i.test(v.name)&&/^en/i.test(v.lang));
-if(preferred)utterance.voice=preferred;
-utterance.onerror=()=>status('음성을 재생하지 못했어요. 다시 눌러주세요.');
+ utterance.lang=preferred.lang||'en-US';
+ utterance.rate=.78;
+ utterance.pitch=1;
+ utterance.voice=preferred;
+ utterance.onerror=()=>status('음성을 재생하지 못했어요. 다시 눌러주세요.');
  window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);
 }
 function status(message){const el=$('#speech-status');if(el)el.textContent=message}
@@ -127,6 +154,7 @@ function render(){
   else if(scope==='reading')html+=`<p class="muted">길이나 가게에서 실제로 보이는 영어를 읽는 연습이에요.</p><div class="list">${readingGroups.map((g,i)=>row('#category/reading:'+g.id,g.title,`${g.desc} · ${pool('reading:'+g.id).length}개`,i)).join('')}</div>`;
   else{
    const items=pool(scope),wordCategory=wordCategories.find(([id])=>'words:'+id===scope);
+   const available=reviewScopes.has(scope)?items:items.filter(e=>!progress[e.id]?.seen);
    if(wordCategory)html=header(wordCategory[1],'#category/words');
    if(scope.startsWith('expressions:'))html=header('외래어·헷갈리는 영어','#category/expressions');
    if(scope.startsWith('patterns:')){
@@ -137,8 +165,8 @@ function render(){
     const g=readingGroups.find(x=>'reading:'+x.id===scope);
     html=header(g?.title||'영어 읽기 연습','#category/reading')+`<p class="muted">${escapeHTML(g?.desc||'')}</p>`;
    }
-   if(!items.length)html+=empty(scope==='mixed'?'먼저 학습한 내용을 모아 복습해요':scope==='wrong'?'틀린 항목이 없어요':'학습 내용을 준비하고 있어요',scope==='mixed'?'단어나 생활영어를 학습하면 종합 복습에 모여요.':'내용이 준비되면 학습 → 테스트 → 오답 복습으로 이어져요.');
-   else html+=`<p class="muted">${items.length}개 중 ${Math.min(10,items.length)}개씩 ${scope==='speaking'?'듣고 따라 말해요.':'먼저 익힌 뒤 테스트해요.'}</p><button class="primary" data-begin="${escapeHTML(scope)}">학습하기</button><p class="small-note">${scope==='mixed'?'이미 학습한 단어와 표현을 함께 복습해요.':'아직 안 본 내용을 먼저, 그다음 틀린 것과 오래 안 본 내용을 복습해요.'}</p>`;
+   if(!available.length)html+=empty(scope==='mixed'?'먼저 학습한 내용을 모아 복습해요':scope==='wrong'?'틀린 항목이 없어요':reviewScopes.has(scope)?'복습할 항목이 없어요':'새로운 학습을 모두 했어요',scope==='mixed'?'단어나 생활영어를 학습하면 종합 복습에 모여요.':scope==='wrong'?'테스트에서 틀린 항목만 여기에 모여요.':reviewScopes.has(scope)?'다시 보고 싶은 내용을 저장하거나 학습하면 여기에 모여요.':'이 메뉴에서 본 내용은 자동으로 다시 나오지 않아요. 틀린 내용은 복습함의 ‘틀린 것 복습’에서만 다시 볼 수 있어요.');
+   else html+=`<p class="muted">${available.length}개 중 ${Math.min(10,available.length)}개씩 ${scope==='speaking'?'듣고 따라 말해요.':'먼저 익힌 뒤 테스트해요.'}</p><button class="primary" data-begin="${escapeHTML(scope)}">학습하기</button><p class="small-note">${reviewScopes.has(scope)?'복습함에서는 저장되거나 이미 학습한 내용을 다시 볼 수 있어요.':'아직 안 본 내용만 나와요. 틀린 내용은 복습함의 ‘틀린 것 복습’에서만 다시 복습해요.'}</p>`;
   }
  }
  else if(page==='saved'||page==='favorites')html=header('복습함','#home')+`<p class="muted">다시 보고 싶은 것만 여기에서 찾아요.</p><div class="list">${row('#category/wrong','틀린 것 복습',`${pool('wrong').length}개`,0)}${row('#category/favorites','즐겨찾기',`${pool('favorites').length}개`,1)}${row('#category/recent','최근 공부',`${pool('recent').length}개`,2)}${row('#category/mixed','종합 복습',`${pool('mixed').length}개`,3)}</div><p class="small-note">진도와 오답은 이 기기에만 저장돼요.</p>`;
