@@ -8,7 +8,8 @@ window.MOM_REFERENCES = {
 };
 window.MOM_WORD_CATEGORIES = [
  ['basic','기본 단어'],['food','음식'],['home','집과 생활'],
- ['travel','여행'],['health','건강'],['feelings','감정과 마음']
+ ['travel','여행'],['health','건강'],['feelings','감정과 마음'],
+ ['kind_nouns','친절한 대학 · 명사'],['kind_adjectives','친절한 대학 · 형용사'],['kind_verbs','친절한 대학 · 동사']
 ];
 window.MOM_CATALOG = [
  ...window.MOM_WORD_CATEGORIES.flatMap(([category])=>window.MOM_WORDS[category].map(word=>({
