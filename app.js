@@ -1,6 +1,8 @@
 const $=s=>document.querySelector(s);
 const icons={home:'<path d="m3 10 9-7 9 7v10H15v-7H9v7H3z"/>',menu:'<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h1m3 0h4M8 12h1m3 0h4M8 16h1m3 0h4"/>',star:'<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/>',settings:'<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',mic:'<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8"/>'};
 const icon=n=>`<svg viewBox="0 0 24 24" aria-hidden="true">${icons[n]}</svg>`;
+const coffeeIcon='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETExYVFhUXFxcaGBgaGx4dHR0dHR8fHx8fHx8fHx8f/2wBDAQYGBgkICQ8JCQ8fFRUfHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8f/wAARCABgAGADASIAAhEBAxEB/8QAHAAAAgIDAQEAAAAAAAAAAAAABQYEBwIDCAEI/8QAPxAAAQMDAgMEBgYJAAAAAAAAAQIDBAAFEQYSITEHEyJBUWEUFTJxgZGhI0JSYnKywdHwM2NzkqKy/8QAGQEBAAMBAQAAAAAAAAAAAAAAAAIDBAEF/8QAKBEBAAICAgEDBAEEAwAAAAAAAAECEQMhEjEEQVEiYXETgaEyQlKhsfD/2gAMAwEAAhEDEQA/APlooaKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//Z';
+const favicon=document.querySelector('link[rel="icon"]');if(favicon)favicon.href=coffeeIcon;
 const catalog=window.MOM_CATALOG, wordCategories=window.MOM_WORD_CATEGORIES;
 const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function read(key,fallback){try{return JSON.parse(localStorage.getItem('mom-english:'+key))??fallback}catch{return fallback}}
@@ -11,14 +13,14 @@ try{session=JSON.parse(sessionStorage.getItem('mom-english:session'));if(session
 const persist=()=>{try{sessionStorage.setItem('mom-english:session',JSON.stringify(session))}catch{}};
 const get=id=>catalog.find(e=>e.id===id);
 const shuffle=items=>{const a=[...items];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
-const menus=[['today','오늘의 복습','짧게 배우고, 가볍게 확인해요'],['expressions','외래어·헷갈리는 영어','한국에서 쓰는 말과 실제 영어'],['words','단어 복습','익숙한 단어부터 10개씩'],['daily','생활영어 복습','짧은 표현을 다시 익혀요'],['patterns','패턴영어 복습','문장 틀에 말을 바꿔 넣어 연습해요'],['reading','영어 읽기 연습','표지판·브랜드·자동차·생활 단어를 읽어봐요'],['speaking','말하기 연습','듣고, 천천히 따라 말해요'],['mixed','종합 복습','배운 단어와 표현을 함께'],['saved','즐겨찾기 / 틀린 것 복습','다시 보고 싶은 내용을 모아서']];
+const menus=[['today','오늘 10분 공부','새로운 내용을 알아서 10개 골라줘요'],['expressions','외래어·헷갈리는 영어','한국에서 쓰는 말과 실제 영어'],['words','단어 복습','익숙한 단어부터 10개씩'],['daily','생활영어 복습','짧은 표현을 다시 익혀요'],['patterns','패턴영어 복습','문장 틀에 말을 바꿔 넣어 연습해요'],['reading','영어 읽기 연습','표지판·브랜드·자동차·생활 단어를 읽어봐요'],['speaking','말하기 연습','듣고, 천천히 따라 말해요'],['mixed','종합 복습','배운 내용을 한데 모아 다시 봐요'],['saved','복습함','틀린 것·즐겨찾기·최근 공부']];
 const names=Object.fromEntries(menus.map(([id,name])=>[id,name]));
 const patternGroups=window.MOM_PATTERN_GROUPS||[];
 const readingGroups=window.MOM_READING_GROUPS||[];
 const arrow='<span class="chevron" aria-hidden="true"></span>';
 const row=(href,title,desc='',i=null)=>`<a class="row" href="${href}">${i===null?'':`<span class="number">${String(i+1).padStart(2,'0')}</span>`}<span><span class="row-title">${escapeHTML(title)}</span>${desc?`<span class="row-desc">${escapeHTML(desc)}</span>`:''}</span>${arrow}</a>`;
 const header=(title,back='#menu')=>`<div class="top"><a class="back" href="${back}" aria-label="뒤로">${arrow}</a></div><h1>${escapeHTML(title)}</h1>`;
-const empty=(text,detail='학습 내용을 추가하면 이곳에서 복습할 수 있어요.')=>`<div class="empty"><h2>${escapeHTML(text)}</h2><p>${escapeHTML(detail)}</p><a class="secondary" href="#menu">전체 목차 보기</a></div>`;
+const empty=(text,detail='학습 내용을 추가하면 이곳에서 복습할 수 있어요.')=>`<div class="empty"><h2>${escapeHTML(text)}</h2><p>${escapeHTML(detail)}</p><a class="secondary" href="#menu">골라서 공부하기</a></div>`;
 function applyPrefs(){document.documentElement.style.fontSize=prefs.size==='large'?'21px':'18px';document.documentElement.style.setProperty('--paper',prefs.theme==='white'?'#ffffff':'#f7f5ef')}
 applyPrefs();
 function pool(scope){
@@ -109,9 +111,14 @@ function answer(index){
 function render(){
  clearTimeout(timer);timer=null;
  const [page='home',sub,arg]=(location.hash.slice(1)||'home').split('/');let html='';
- $('#nav').innerHTML=[['home','홈','home'],['menu','목차','menu'],['saved','복습함','star'],['settings','설정','settings']].map(([id,label,ico])=>`<a href="#${id}" ${page===id?'aria-current="page"':''}>${icon(ico)}<span>${label}</span></a>`).join('');
- if(page==='home')html=`<section class="home"><h1>엄마영어</h1><p class="intro">매일, 조금씩<br>나를 위한 영어 시간</p><a class="primary" href="#category/today">오늘의 복습 시작</a><div class="group">${row('#category/expressions','외래어·헷갈리는 영어','생활 속 표현, 실제 영어로')}${row('#menu','전체 목차')}${row('#saved','즐겨찾기 / 틀린 것 복습')}${row('#category/recent','최근 학습')}</div></section>`;
- else if(page==='menu')html=header('전체 목차','#home')+`<div class="list">${menus.map(([id,title,desc],i)=>row(id==='saved'?'#saved':'#category/'+id,title,desc,i)).join('')}</div>`;
+ $('#nav').innerHTML=[['home','홈','home'],['menu','공부','menu'],['saved','복습','star'],['settings','설정','settings']].map(([id,label,ico])=>`<a href="#${id}" ${page===id?'aria-current="page"':''}>${icon(ico)}<span>${label}</span></a>`).join('');
+ if(page==='home')html=`<section class="home"><img class="home-icon" src="${coffeeIcon}" alt="엄마영어 커피 아이콘"><h1>엄마영어</h1><p class="intro">매일, 조금씩<br>나를 위한 영어 시간</p><div class="home-choices"><a class="home-choice today-choice" href="#category/today"><span><strong>오늘 10분 공부</strong><small>새로운 내용 10개를 알아서 골라줘요</small></span>${arrow}</a><a class="home-choice" href="#menu"><span><strong>골라서 공부하기</strong><small>단어 · 생활영어 · 영어 읽기</small></span>${arrow}</a><a class="home-choice" href="#saved"><span><strong>복습함</strong><small>틀린 것 · 즐겨찾기 · 최근 공부</small></span>${arrow}</a></div></section>`;
+ else if(page==='menu')html=header('골라서 공부하기','#home')+`<p class="muted">공부하고 싶은 종류만 고르면 돼요.</p><div class="list">${row('#choose/words','단어 · 표현','단어 / 외래어·콩글리시 / 헷갈리는 영어',0)}${row('#choose/life','생활영어','생활영어 / 패턴영어 / 말하기',1)}${row('#category/reading','영어 읽기','표지판 / 브랜드 / 자동차 / 기초단어',2)}</div>`;
+ else if(page==='choose'){
+  if(sub==='words')html=header('단어 · 표현','#menu')+`<div class="list">${row('#category/words','단어','기본 단어부터 친절한 대학 단어까지',0)}${row('#category/expressions','외래어 · 헷갈리는 영어','외래어 / 콩글리시 / 헷갈리는 표현',1)}</div>`;
+  else if(sub==='life')html=header('생활영어','#menu')+`<div class="list">${row('#category/daily','생활영어','짧은 일상 표현',0)}${row('#category/patterns','패턴영어','문장 틀을 바꿔가며 연습',1)}${row('#category/speaking','말하기','듣고 천천히 따라 말하기',2)}</div>`;
+  else{go('menu');return}
+ }
  else if(page==='category'){
   const scope=sub==='quiz'?'mixed':sub;html=header(names[scope]||'최근 학습');
   if(scope==='words')html+=`<div class="list">${wordCategories.map(([id,name],i)=>row('#category/words:'+id,name,`${pool('words:'+id).length}개 · 한 번에 10개`,i)).join('')}</div>`;
@@ -134,7 +141,7 @@ function render(){
    else html+=`<p class="muted">${items.length}개 중 ${Math.min(10,items.length)}개씩 ${scope==='speaking'?'듣고 따라 말해요.':'먼저 익힌 뒤 테스트해요.'}</p><button class="primary" data-begin="${escapeHTML(scope)}">학습하기</button><p class="small-note">${scope==='mixed'?'이미 학습한 단어와 표현을 함께 복습해요.':'아직 안 본 내용을 먼저, 그다음 틀린 것과 오래 안 본 내용을 복습해요.'}</p>`;
   }
  }
- else if(page==='saved'||page==='favorites')html=header('즐겨찾기 / 틀린 것 복습','#home')+`<div class="list">${row('#category/favorites','즐겨찾기',`${pool('favorites').length}개`,0)}${row('#category/wrong','틀린 것 복습',`${pool('wrong').length}개`,1)}</div><p class="small-note">진도와 오답은 이 기기에만 저장돼요.</p>`;
+ else if(page==='saved'||page==='favorites')html=header('복습함','#home')+`<p class="muted">다시 보고 싶은 것만 여기에서 찾아요.</p><div class="list">${row('#category/wrong','틀린 것 복습',`${pool('wrong').length}개`,0)}${row('#category/favorites','즐겨찾기',`${pool('favorites').length}개`,1)}${row('#category/recent','최근 공부',`${pool('recent').length}개`,2)}${row('#category/mixed','종합 복습',`${pool('mixed').length}개`,3)}</div><p class="small-note">진도와 오답은 이 기기에만 저장돼요.</p>`;
  else if(page==='study'&&session){
   const items=session.ids.map(get).filter(Boolean),speaking=session.scope==='speaking';
   html=header(speaking?'말하기 연습':'학습하기')+`<p class="muted">${items.length}개 · 영어를 누르면 발음을 들을 수 있어요.${speaking?'<br>듣고 천천히 따라 말해보세요.':''}</p><p id="speech-status" class="muted" role="status"></p><div class="list">${items.map(card).join('')}</div>`;
