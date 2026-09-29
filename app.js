@@ -1,7 +1,7 @@
 const $=s=>document.querySelector(s);
 const icons={home:'<path d="m3 10 9-7 9 7v10H15v-7H9v7H3z"/>',menu:'<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h1m3 0h4M8 12h1m3 0h4M8 16h1m3 0h4"/>',star:'<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/>',settings:'<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',mic:'<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8"/>'};
 const icon=n=>`<svg viewBox="0 0 24 24" aria-hidden="true">${icons[n]}</svg>`;
-const coffeeIcon='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETExYVFhUXFxcaGBgaGx4dHR0dHR8fHx8fHx8fHx8f/2wBDAQYGBgkICQ8JCQ8fFRUfHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8f/wAARCABgAGADASIAAhEBAxEB/8QAHAAAAgIDAQEAAAAAAAAAAAAABQYEBwIDCAEI/8QAPxAAAQMDAgMEBgYJAAAAAAAAAQIDBAAFEQYSITEHEyJBUWEUFTJxgZGhI0JSYnKywdHwM2NzkqKy/8QAGQEBAAMBAQAAAAAAAAAAAAAAAAIDBAEF/8QAKBEBAAICAgEDBAEEAwAAAAAAAAECEQMhEjEEQVEiYXETgaEyQlKhsfD/2gAMAwEAAhEDEQA/APlooaKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//Z';
+const coffeeIcon='assets/mom-coffee-icon.jpg?v=1';
 const favicon=document.querySelector('link[rel="icon"]');if(favicon)favicon.href=coffeeIcon;
 const catalog=window.MOM_CATALOG, wordCategories=window.MOM_WORD_CATEGORIES;
 const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
