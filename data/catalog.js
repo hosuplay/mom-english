@@ -19,5 +19,6 @@ window.MOM_CATALOG = [
  ...window.MOM_DAILY.map(item=>({...item,category:item.category||'feelings',
   english:item.english||item.full||item.text,korean:item.korean||item.meaning,
   source:item.source||'',lessonTag:item.lessonTag||'',type:'phrase'})),
- ...window.MOM_EXPRESSIONS.map(item=>({...item,source:item.source||'',lessonTag:item.lessonTag||'',type:'expression'}))
+ ...window.MOM_EXPRESSIONS.map(item=>({...item,source:item.source||'',lessonTag:item.lessonTag||'',type:'expression'})),
+ ...(window.MOM_PATTERNS||[]).map(item=>({...item,source:item.source||'',lessonTag:item.lessonTag||'',type:'pattern'}))
 ];
