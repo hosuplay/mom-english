@@ -22,3 +22,17 @@ window.MOM_CATALOG = [
  ...window.MOM_EXPRESSIONS.map(item=>({...item,source:item.source||'',lessonTag:item.lessonTag||'',type:'expression'})),
  ...(window.MOM_PATTERNS||[]).map(item=>({...item,source:item.source||'',lessonTag:item.lessonTag||'',type:'pattern'}))
 ];
+
+const readingNormalize=value=>String(value||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[’']/g,"'").replace(/[^a-z0-9]+/g,' ').trim();
+(window.MOM_READING_ITEMS||[]).forEach(item=>{
+ const existing=item.reuseExisting
+  ? window.MOM_CATALOG.find(entry=>readingNormalize(entry.english)===readingNormalize(item.english))
+  : null;
+ if(existing){
+  existing.readingCategories=[...new Set([...(existing.readingCategories||[]),...item.categories])];
+  existing.readingSource=item.source||'';
+  existing.readingLessonTag=item.lessonTag||'';
+ }else{
+  window.MOM_CATALOG.push({...item,readingCategories:item.categories,source:item.source||'',lessonTag:item.lessonTag||'',type:'reading'});
+ }
+});
