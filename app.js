@@ -59,14 +59,15 @@ function speak(id){
  if(!('speechSynthesis'in window)){status('이 브라우저에서는 음성 재생을 지원하지 않아요.');return}
  const utterance=new SpeechSynthesisUtterance(e.english);
 utterance.lang='en-US';
-utterance.rate=.65;
-utterance.pitch=1.05;
+utterance.rate=.78;
+utterance.pitch=1;
 const voices=window.speechSynthesis.getVoices();
-const preferred=voices.find(v=>/^en-US$/i.test(v.lang)&&/(Samantha|Ava|Allison|Susan|Zira|Aria|Jenny|Google US English|Female)/i.test(v.name))
-||voices.find(v=>/^en-US$/i.test(v.lang))
-||voices.find(v=>/^en/i.test(v.lang));
+const preferred=
+  voices.find(v=>v.name==='Samantha')
+  ||voices.find(v=>/Google US English/i.test(v.name))
+  ||voices.find(v=>/(Aria|Jenny|Ava|Allison|Sandy|Shelley|Flo)/i.test(v.name)&&/^en/i.test(v.lang));
 if(preferred)utterance.voice=preferred;
- utterance.onerror=()=>status('음성을 재생하지 못했어요. 다시 눌러주세요.');
+utterance.onerror=()=>status('음성을 재생하지 못했어요. 다시 눌러주세요.');
  window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);
 }
 function status(message){const el=$('#speech-status');if(el)el.textContent=message}
