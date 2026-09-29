@@ -1,0 +1,17 @@
+{
+  "name": "엄마영어",
+  "short_name": "엄마영어",
+  "start_url": "/mom-english/",
+  "scope": "/mom-english/",
+  "display": "standalone",
+  "background_color": "#f7f5ef",
+  "theme_color": "#576f64",
+  "icons": [
+    {
+      "src": "/mom-english/assets/mom-coffee-icon.jpg?v=2",
+      "sizes": "any",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}
