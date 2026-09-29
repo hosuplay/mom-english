@@ -59,7 +59,7 @@ function speak(id){
  if(!('speechSynthesis'in window)){status('이 브라우저에서는 음성 재생을 지원하지 않아요.');return}
  const utterance=new SpeechSynthesisUtterance(e.english);
 utterance.lang='en-US';
-utterance.rate=.78;
+utterance.rate=.90;
 utterance.pitch=1;
 const voices=window.speechSynthesis.getVoices();
 const preferred=
