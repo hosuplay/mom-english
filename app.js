@@ -62,6 +62,7 @@ function begin(scope,ids){
  save('progress',progress);save('recent',recent);persist();go('study');
 }
 let voiceCache=[];
+const isAndroid=/Android/i.test(navigator.userAgent||'');
 function refreshVoices(){
  if(!('speechSynthesis'in window))return [];
  const voices=window.speechSynthesis.getVoices()||[];
@@ -80,11 +81,23 @@ if('speechSynthesis'in window){
  refreshVoices();
  window.speechSynthesis.addEventListener?.('voiceschanged',refreshVoices);
 }
+function makeEnglishUtterance(text,voice){
+ const utterance=new SpeechSynthesisUtterance(text);
+ utterance.lang='en-US';
+ utterance.rate=.78;
+ utterance.pitch=1;
+ if(voice)utterance.voice=voice;
+ return utterance;
+}
 async function speak(id){
  const e=get(id);if(!e)return;
  if(!('speechSynthesis'in window)){status('이 브라우저에서는 음성 재생을 지원하지 않아요.');return}
  let preferred=preferredEnglishVoice();
- if(!preferred){
+
+ // Apple 계열은 엉뚱한 기본 음성으로 떨어지지 않도록 영어 음성을 잠깐 기다립니다.
+ // Android/Samsung은 getVoices()가 빈 배열이어도 실제 TTS는 동작하는 경우가 있어
+ // 영어 언어 코드만 지정한 시스템 음성을 바로 허용합니다.
+ if(!preferred&&!isAndroid){
   await new Promise(resolve=>{
    let done=false;
    const finish=()=>{if(done)return;done=true;window.speechSynthesis.removeEventListener?.('voiceschanged',finish);resolve()};
@@ -93,18 +106,28 @@ async function speak(id){
   });
   preferred=preferredEnglishVoice();
  }
- if(!preferred){
+ if(!preferred&&!isAndroid){
   status('영어 원어민 음성을 불러오는 중이에요. 잠시 후 다시 눌러주세요.');
   return;
  }
- const utterance=new SpeechSynthesisUtterance(e.english);
- utterance.lang=preferred.lang||'en-US';
- utterance.rate=.78;
- utterance.pitch=1;
- utterance.voice=preferred;
- utterance.onerror=()=>status('음성을 재생하지 못했어요. 다시 눌러주세요.');
- window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);
+
+ const play=(voice,allowRetry)=>{
+  const utterance=makeEnglishUtterance(e.english,voice);
+  utterance.onerror=()=>{
+   if(isAndroid&&allowRetry&&voice){
+    // 일부 갤럭시는 명시한 voice 객체를 거부하므로 en-US 시스템 음성으로 한 번 재시도합니다.
+    play(null,false);
+   }else{
+    status('음성을 재생하지 못했어요. 휴대폰의 미디어 음량도 확인해 주세요.');
+   }
+  };
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.resume?.();
+  window.speechSynthesis.speak(utterance);
+ };
+ play(preferred,true);
 }
+
 function status(message){const el=$('#speech-status');if(el)el.textContent=message}
 function card(e){
  const readingMode=session?.scope?.startsWith('reading:');
