@@ -1,7 +1,7 @@
 const $=s=>document.querySelector(s);
 const icons={home:'<path d="m3 10 9-7 9 7v10H15v-7H9v7H3z"/>',menu:'<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h1m3 0h4M8 12h1m3 0h4M8 16h1m3 0h4"/>',star:'<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/>',settings:'<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',mic:'<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8"/>'};
 const icon=n=>`<svg viewBox="0 0 24 24" aria-hidden="true">${icons[n]}</svg>`;
-const coffeeIcon='assets/mom-coffee-icon.jpg?v=1';
+const coffeeIcon='assets/mom-coffee-icon-192.png?v=3';
 const favicon=document.querySelector('link[rel="icon"]');if(favicon)favicon.href=coffeeIcon;
 const catalog=window.MOM_CATALOG, wordCategories=window.MOM_WORD_CATEGORIES;
 const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -93,10 +93,6 @@ async function speak(id){
  const e=get(id);if(!e)return;
  if(!('speechSynthesis'in window)){status('이 브라우저에서는 음성 재생을 지원하지 않아요.');return}
  let preferred=preferredEnglishVoice();
-
- // Apple 계열은 엉뚱한 기본 음성으로 떨어지지 않도록 영어 음성을 잠깐 기다립니다.
- // Android/Samsung은 getVoices()가 빈 배열이어도 실제 TTS는 동작하는 경우가 있어
- // 영어 언어 코드만 지정한 시스템 음성을 바로 허용합니다.
  if(!preferred&&!isAndroid){
   await new Promise(resolve=>{
    let done=false;
@@ -110,12 +106,10 @@ async function speak(id){
   status('영어 원어민 음성을 불러오는 중이에요. 잠시 후 다시 눌러주세요.');
   return;
  }
-
  const play=(voice,allowRetry)=>{
   const utterance=makeEnglishUtterance(e.english,voice);
   utterance.onerror=()=>{
    if(isAndroid&&allowRetry&&voice){
-    // 일부 갤럭시는 명시한 voice 객체를 거부하므로 en-US 시스템 음성으로 한 번 재시도합니다.
     play(null,false);
    }else{
     status('음성을 재생하지 못했어요. 휴대폰의 미디어 음량도 확인해 주세요.');
@@ -131,8 +125,11 @@ async function speak(id){
 function status(message){const el=$('#speech-status');if(el)el.textContent=message}
 function card(e){
  const readingMode=session?.scope?.startsWith('reading:');
- const source=readingMode?(e.readingSource||e.source):(e.source||'');
- const lessonTag=readingMode?(e.readingLessonTag||e.lessonTag):(e.lessonTag||'');
+ const rawSource=readingMode?(e.readingSource||e.source):(e.source||'');
+ const rawLessonTag=readingMode?(e.readingLessonTag||e.lessonTag):(e.lessonTag||'');
+ const hideImportedSource=rawSource==='친절한 대학'||/^업로드 자막/.test(rawLessonTag||'');
+ const source=hideImportedSource?'':rawSource;
+ const lessonTag=hideImportedSource?'':rawLessonTag;
  return `<article class="study-card"><button class="star" data-favorite="${escapeHTML(e.id)}" aria-label="즐겨찾기 ${favorites.includes(e.id)?'해제':'추가'}" aria-pressed="${favorites.includes(e.id)}">${icon('star')}</button>${e.type==='pattern'&&e.pattern?`<p class="muted">패턴: ${escapeHTML(e.pattern)}</p>`:e.koreanUsage?`<p class="muted">한국에서: ${escapeHTML(e.koreanUsage)}</p>`:''}<button class="speak-word" data-speak="${escapeHTML(e.id)}" lang="en" aria-label="${escapeHTML(e.english)} 발음 듣기">${escapeHTML(e.english)}<span aria-hidden="true"> ♪</span></button><p class="translation">${escapeHTML(e.korean)}</p>${e.type==='pattern'&&e.tip?`<p class="muted">${escapeHTML(e.tip)}</p>`:e.difference?`<p class="muted">${escapeHTML(e.difference)}</p>`:''}${source||lessonTag?`<p class="small-note">${escapeHTML([source,lessonTag].filter(Boolean).join(' · '))}</p>`:''}</article>`;
 }
 function testStart(mode){
@@ -165,7 +162,7 @@ function render(){
  if(page==='home')html=`<section class="home"><img class="home-icon" src="${coffeeIcon}" alt="엄마영어 커피 아이콘"><h1>엄마영어</h1><p class="intro">매일, 조금씩<br>나를 위한 영어 시간</p><div class="home-choices"><a class="home-choice today-choice" href="#category/today"><span><strong>오늘 10분 공부</strong><small>새로운 내용 10개를 알아서 골라줘요</small></span>${arrow}</a><a class="home-choice" href="#menu"><span><strong>골라서 공부하기</strong><small>단어 · 생활영어 · 영어 읽기</small></span>${arrow}</a><a class="home-choice" href="#saved"><span><strong>복습함</strong><small>틀린 것 · 즐겨찾기 · 최근 공부</small></span>${arrow}</a></div></section>`;
  else if(page==='menu')html=header('골라서 공부하기','#home')+`<p class="muted">공부하고 싶은 종류만 고르면 돼요.</p><div class="list">${row('#choose/words','단어 · 표현','단어 / 외래어·콩글리시 / 헷갈리는 영어',0)}${row('#choose/life','생활영어','생활영어 / 패턴영어 / 말하기',1)}${row('#category/reading','영어 읽기','표지판 / 브랜드 / 자동차 / 기초단어',2)}</div>`;
  else if(page==='choose'){
-  if(sub==='words')html=header('단어 · 표현','#menu')+`<div class="list">${row('#category/words','단어','기본 단어부터 친절한 대학 단어까지',0)}${row('#category/expressions','외래어 · 헷갈리는 영어','외래어 / 콩글리시 / 헷갈리는 표현',1)}</div>`;
+  if(sub==='words')html=header('단어 · 표현','#menu')+`<div class="list">${row('#category/words','단어','생활에서 자주 쓰는 단어를 주제별로',0)}${row('#category/expressions','외래어 · 헷갈리는 영어','외래어 / 콩글리시 / 헷갈리는 표현',1)}</div>`;
   else if(sub==='life')html=header('생활영어','#menu')+`<div class="list">${row('#category/daily','생활영어','짧은 일상 표현',0)}${row('#category/patterns','패턴영어','문장 틀을 바꿔가며 연습',1)}${row('#category/speaking','말하기','듣고 천천히 따라 말하기',2)}</div>`;
   else{go('menu');return}
  }
