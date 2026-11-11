@@ -15,3 +15,8 @@
 .home-choice.today-choice{background:var(--accent);border-color:var(--accent);color:#fff}
 .home-choice.today-choice small,.home-choice.today-choice .chevron{color:rgba(255,255,255,.82)}
 @media(min-width:650px){.home{padding-top:72px}}
+
+#place-cards { margin-top: 16px; }
+#place-cards .speak-word, #place-cards summary { min-height: 44px; }
+#place-cards summary { padding-block: 12px; cursor: pointer; }
+#place-cards details { margin-top: 8px; }

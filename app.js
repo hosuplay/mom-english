@@ -17,6 +17,13 @@ const menus=[['today','오늘 10분 공부','새로운 내용을 알아서 10개
 const names=Object.fromEntries(menus.map(([id,name])=>[id,name]));
 const patternGroups=window.MOM_PATTERN_GROUPS||[];
 const readingGroups=window.MOM_READING_GROUPS||[];
+const places=window.MOM_PLACES;
+const placeSteps=[
+ ['words','단어'],['phrases','예문'],['dialogue','상황 대화'],
+ ['grammar','문법'],['listen','듣기'],['quiz','퀴즈']
+];
+const placePath=(place,step)=>'#places/'+place.id+(step?'/'+step:'');
+const sessionPlace=()=>places.find(place=>session?.scope==='place:'+place.id);
 const arrow='<span class="chevron" aria-hidden="true"></span>';
 const row=(href,title,desc='',i=null)=>`<a class="row" href="${href}">${i===null?'':`<span class="number">${String(i+1).padStart(2,'0')}</span>`}<span><span class="row-title">${escapeHTML(title)}</span>${desc?`<span class="row-desc">${escapeHTML(desc)}</span>`:''}</span>${arrow}</a>`;
 const header=(title,back='#menu')=>`<div class="top"><a class="back" href="${back}" aria-label="뒤로">${arrow}</a></div><h1>${escapeHTML(title)}</h1>`;
@@ -36,7 +43,7 @@ function pool(scope){
  if(scope==='wrong')return catalog.filter(e=>progress[e.id]?.wrong);
  if(scope==='mixed')return catalog.filter(e=>progress[e.id]?.seen&&!progress[e.id]?.wrong);
  if(scope==='recent')return recent.map(get).filter(e=>e&&!progress[e.id]?.wrong);
- if(scope==='today')return catalog.filter(e=>e.type!=='pattern'&&e.type!=='reading');
+ if(scope==='today')return catalog.filter(e=>e.type!=='pattern'&&e.type!=='reading'&&e.type!=='place');
  return [];
 }
 const reviewScopes=new Set(['wrong','favorites','recent','mixed']);
@@ -55,11 +62,19 @@ function selectBatch(items,scope){
  return [...fresh,...repeat].slice(0,10);
 }
 function go(route){if(location.hash==='#'+route)render();else location.hash=route}
-function begin(scope,ids){
- const items=ids?ids.map(get).filter(Boolean).slice(0,10):selectBatch(pool(scope),scope);
+function recordSeen(ids){
+ const now=Date.now();
+ ids.forEach(id=>{
+  progress[id]={...progress[id],seen:true,lastSeen:now};
+  recent=[id,...recent.filter(entry=>entry!==id)].slice(0,30);
+ });
+ save('progress',progress);save('recent',recent);
+}
+function begin(scope,ids,mode){
+ const items=ids?ids.map(get).filter(Boolean).slice(0,scope.startsWith('place:')?undefined:10):selectBatch(pool(scope),scope);
  session={scope,ids:items.map(e=>e.id),answers:[],index:0,mode:null,questions:[],feedback:null};
- const now=Date.now();items.forEach(e=>{progress[e.id]={...progress[e.id],seen:true,lastSeen:now};recent=[e.id,...recent.filter(id=>id!==e.id)].slice(0,30)});
- save('progress',progress);save('recent',recent);persist();go('study');
+ recordSeen(session.ids);persist();
+ if(mode)testStart(mode);else go('study');
 }
 let voiceCache=[];
 const isAndroid=/Android/i.test(navigator.userAgent||'');
@@ -132,14 +147,66 @@ function card(e){
  const lessonTag=hideImportedSource?'':rawLessonTag;
  return `<article class="study-card"><button class="star" data-favorite="${escapeHTML(e.id)}" aria-label="즐겨찾기 ${favorites.includes(e.id)?'해제':'추가'}" aria-pressed="${favorites.includes(e.id)}">${icon('star')}</button>${e.type==='pattern'&&e.pattern?`<p class="muted">패턴: ${escapeHTML(e.pattern)}</p>`:e.koreanUsage?`<p class="muted">한국에서: ${escapeHTML(e.koreanUsage)}</p>`:''}<button class="speak-word" data-speak="${escapeHTML(e.id)}" lang="en" aria-label="${escapeHTML(e.english)} 발음 듣기">${escapeHTML(e.english)}<span aria-hidden="true"> ♪</span></button><p class="translation">${escapeHTML(e.korean)}</p>${e.type==='pattern'&&e.tip?`<p class="muted">${escapeHTML(e.tip)}</p>`:e.difference?`<p class="muted">${escapeHTML(e.difference)}</p>`:''}${source||lessonTag?`<p class="small-note">${escapeHTML([source,lessonTag].filter(Boolean).join(' · '))}</p>`:''}</article>`;
 }
+function placeContent(place, step){
+ const index=placeSteps.findIndex(([id])=>id===step);
+ if(index<0)return header(place.title,'#places')+
+  `<div class="list">${placeSteps.map(([id,label],i)=>row(placePath(place,id),label,'',i)).join('')}</div>`;
+
+ const next=placeSteps[index+1];
+ const dialogue=step==='dialogue';
+ const listening=step==='listen';
+ const hideMeanings=['words','phrases','dialogue'].includes(step);
+ if(hideMeanings)recordSeen(dialogue?place.dialogue.map(([,id])=>id):place[step]);
+ let content;
+ if(listening){
+  content='<p class="muted">대화 순서대로 음성을 듣고 뜻을 확인해 보세요.</p>'+
+   place.dialogue.map(([speaker,id])=>`<article class="study-card">
+    <h2>${escapeHTML(speaker)}</h2>
+    <button class="primary" data-speak="${escapeHTML(id)}">영어 듣기 ♪</button>
+    <details><summary>문장과 뜻 보기</summary>
+     <button class="speak-word" data-speak="${escapeHTML(id)}" lang="en">${escapeHTML(get(id).english)}</button>
+     <p class="translation">${escapeHTML(get(id).korean)}</p>
+    </details>
+   </article>`).join('');
+ }else if(step==='grammar'){
+  content=place.grammar.map(([id,note])=>`<section>${card(get(id))}<p>${escapeHTML(note)}</p></section>`).join('');
+ }else if(dialogue){
+  content=place.dialogue.map(([speaker,id])=>`<section><h2>${escapeHTML(speaker)}</h2>${card(get(id))}</section>`).join('');
+ }else if(step==='quiz'){
+  const wrong=placeQuizIds(place).filter(id=>progress[id]?.wrong).length;
+  content=`<p class="muted">한국어 뜻을 보고 알맞은 영어를 고르세요.</p>
+   <button class="primary" data-place-quiz="${place.id}">퀴즈 시작</button>
+   ${wrong?`<button class="secondary" data-place-quiz="${place.id}" data-place-wrong>틀린 것 복습 · ${wrong}개</button>`:''}`;
+ }else{
+  content=place[step].map(id=>card(get(id))).join('');
+ }
+ return header(placeSteps[index][1],placePath(place))+
+  `<p class="muted">${place.title} · ${index+1} / ${placeSteps.length}</p>
+   <p id="speech-status" class="muted" role="status"></p>
+   ${hideMeanings?'<button class="secondary" data-hide-meanings aria-controls="place-cards" aria-pressed="false">뜻 가리기</button>':''}
+   <div class="list" id="place-cards">${content}</div>
+   ${next?`<div class="study-actions"><a class="primary" href="${placePath(place,next[0])}">다음 · ${next[1]} ${arrow}</a></div>`:''}`;
+}
+
+const placeQuizIds=place=>[...new Set([...place.words,...place.phrases,...place.dialogue.map(([,id])=>id)])];
+
 function testStart(mode){
  if(!session?.ids.length)return;
  const answerKey=mode==='en-ko'?'korean':'english';
+ const place=sessionPlace();
  session.mode=mode;session.index=0;session.answers=[];session.feedback=null;
  session.questions=shuffle(session.ids).map(id=>{
   const e=get(id),answer=e[answerKey];
-  const scoped=session.scope?.startsWith('reading:')?pool(session.scope):catalog.filter(x=>x.type===e.type);
-  const candidates=shuffle(scoped).concat(shuffle(catalog));
+  let candidates;
+  if(place){
+   const ids=place.words.includes(id)
+    ? places.flatMap(x=>x.words)
+    : places.flatMap(x=>placeQuizIds(x).filter(cardId=>!x.words.includes(cardId)));
+   candidates=shuffle(ids.map(get));
+  }else{
+   const scoped=session.scope?.startsWith('reading:')?pool(session.scope):catalog.filter(x=>x.type===e.type);
+   candidates=shuffle(scoped).concat(shuffle(catalog));
+  }
   const distractors=[...new Set(candidates.filter(x=>x[answerKey]!==answer&&x.english!==e.english&&x.korean!==e.korean).map(x=>x[answerKey]))].slice(0,3);
   return {id,answer,options:shuffle([answer,...distractors])};
  });persist();go('test');
@@ -160,7 +227,12 @@ function render(){
  const [page='home',sub,arg]=(location.hash.slice(1)||'home').split('/');let html='';
  $('#nav').innerHTML=[['home','홈','home'],['menu','공부','menu'],['saved','복습','star'],['settings','설정','settings']].map(([id,label,ico])=>`<a href="#${id}" ${page===id?'aria-current="page"':''}>${icon(ico)}<span>${label}</span></a>`).join('');
  if(page==='home')html=`<section class="home"><img class="home-icon" src="${coffeeIcon}" alt="엄마영어 커피 아이콘"><h1>엄마영어</h1><p class="intro">매일, 조금씩<br>나를 위한 영어 시간</p><div class="home-choices"><a class="home-choice today-choice" href="#category/today"><span><strong>오늘 10분 공부</strong><small>새로운 내용 10개를 알아서 골라줘요</small></span>${arrow}</a><a class="home-choice" href="#menu"><span><strong>골라서 공부하기</strong><small>단어 · 생활영어 · 영어 읽기</small></span>${arrow}</a><a class="home-choice" href="#saved"><span><strong>복습함</strong><small>틀린 것 · 즐겨찾기 · 최근 공부</small></span>${arrow}</a></div></section>`;
- else if(page==='menu')html=header('골라서 공부하기','#home')+`<p class="muted">공부하고 싶은 종류만 고르면 돼요.</p><div class="list">${row('#choose/words','단어 · 표현','단어 / 외래어·콩글리시 / 헷갈리는 영어',0)}${row('#choose/life','생활영어','생활영어 / 패턴영어 / 말하기',1)}${row('#category/reading','영어 읽기','표지판 / 브랜드 / 자동차 / 기초단어',2)}</div>`;
+ else if(page==='menu')html=header('골라서 공부하기','#home')+`<p class="muted">공부하고 싶은 종류만 고르면 돼요.</p><div class="list">${row('#choose/words','단어 · 표현','단어 / 외래어·콩글리시 / 헷갈리는 영어',0)}${row('#choose/life','생활영어','생활영어 / 패턴영어 / 말하기',1)}${row('#category/reading','영어 읽기','표지판 / 브랜드 / 자동차 / 기초단어',2)}${row('#places','장소별 영어','수영장 / 탁구장 / 시장',3)}</div>`;
+ else if(page==='places'){
+  const place=places.find(item=>item.id===sub);
+  html=place?placeContent(place,arg):header('장소별 영어','#menu')+
+   `<div class="list">${places.map(item=>row(placePath(item),item.title,item.description)).join('')}</div>`;
+ }
  else if(page==='choose'){
   if(sub==='words')html=header('단어 · 표현','#menu')+`<div class="list">${row('#category/words','단어','생활에서 자주 쓰는 단어를 주제별로',0)}${row('#category/expressions','외래어 · 헷갈리는 영어','외래어 / 콩글리시 / 헷갈리는 표현',1)}</div>`;
   else if(sub==='life')html=header('생활영어','#menu')+`<div class="list">${row('#category/daily','생활영어','짧은 일상 표현',0)}${row('#category/patterns','패턴영어','문장 틀을 바꿔가며 연습',1)}${row('#category/speaking','말하기','듣고 천천히 따라 말하기',2)}</div>`;
@@ -199,13 +271,14 @@ function render(){
  else if(page==='modes'&&session?.ids.length)html=header('테스트 방식 선택','#study')+`<p class="muted">방금 학습한 ${session.ids.length}개를 확인해요.</p><div class="list"><button class="row" data-mode="en-ko"><span><span class="row-title">영어 → 한글</span><span class="row-desc">영어를 보고 한국어 뜻 고르기</span></span></button><button class="row" data-mode="ko-en"><span><span class="row-title">한글 → 영어</span><span class="row-desc">한국어 뜻을 보고 영어 고르기</span></span></button></div>`;
  else if(page==='test'&&session?.questions.length){
   if(session.index>=session.questions.length){go('result');return}
-  const q=session.questions[session.index],e=get(q.id),feedback=session.feedback;
-  html=`<div class="top"><a class="back" href="#study" aria-label="학습으로 돌아가기">${arrow}</a><span class="top-label">${session.mode==='en-ko'?'영어 → 한글':'한글 → 영어'}</span><span class="counter">${session.index+1} / ${session.questions.length}</span></div><div class="progress"><span style="width:${session.index/session.questions.length*100}%"></span></div><div class="question"><p class="instruction">알맞은 ${session.mode==='en-ko'?'뜻':'영어'}을 고르세요.</p><p class="english" ${session.mode==='en-ko'?'lang="en"':''}>${escapeHTML(session.mode==='en-ko'?e.english:e.korean)}</p></div><div class="options">${q.options.map((text,i)=>`<button class="option ${feedback?.index===i?'selected':''}" data-answer="${i}" ${feedback?'disabled':''}><span class="radio" aria-hidden="true"></span>${escapeHTML(text)}</button>`).join('')}</div>${feedback?`<div class="answer" role="status">${feedback.correct?'정답이에요!':'다시 익히면 괜찮아요.'}<small>정답: ${escapeHTML(q.answer)}</small></div>`:'<p class="muted center">고르면 자동으로 다음 문제로 넘어가요.</p>'}`;
+  const q=session.questions[session.index],e=get(q.id),feedback=session.feedback,place=sessionPlace();
+  html=`<div class="top"><a class="back" href="${place?placePath(place,'quiz'):'#study'}" aria-label="학습으로 돌아가기">${arrow}</a><span class="top-label">${session.mode==='en-ko'?'영어 → 한글':'한글 → 영어'}</span><span class="counter">${session.index+1} / ${session.questions.length}</span></div><div class="progress"><span style="width:${session.index/session.questions.length*100}%"></span></div><div class="question"><p class="instruction">알맞은 ${session.mode==='en-ko'?'뜻':'영어'}을 고르세요.</p><p class="english" ${session.mode==='en-ko'?'lang="en"':''}>${escapeHTML(session.mode==='en-ko'?e.english:e.korean)}</p></div><div class="options">${q.options.map((text,i)=>`<button class="option ${feedback?.index===i?'selected':''}" data-answer="${i}" ${feedback?'disabled':''}><span class="radio" aria-hidden="true"></span>${escapeHTML(text)}</button>`).join('')}</div>${feedback?`<div class="answer" role="status">${feedback.correct?'정답이에요!':'다시 익히면 괜찮아요.'}<small>정답: ${escapeHTML(q.answer)}</small></div>`:'<p class="muted center">고르면 자동으로 다음 문제로 넘어가요.</p>'}`;
   if(feedback)timer=setTimeout(()=>{if(location.hash==='#test')advance()},1400);
  }
  else if(page==='result'&&session?.questions.length){
   const wrong=session.answers.filter(a=>!a.correct).map(a=>get(a.id)),correct=session.answers.filter(a=>a.correct).length;
-  html=header('복습 결과')+`<div class="result-score"><strong>${Math.round(correct/session.questions.length*100)}점</strong><p>${session.questions.length}문제 중 ${correct}개 정답</p></div><h2>틀린 ${wrong.some(e=>e.type!=='word')?'항목':'단어'} ${wrong.length}개</h2><div class="list">${wrong.map(card).join('')||'<p class="muted">모두 맞혔어요. 잘하셨어요!</p>'}</div><p id="speech-status" role="status" class="muted"></p><div class="study-actions">${wrong.length?'<button class="secondary" data-review-wrong>틀린 단어 다시 보기</button>':''}<button class="secondary" data-retry>다시 풀기</button><button class="primary" data-next-batch>다음 10개 학습</button></div>`;
+  const place=sessionPlace();
+  html=header('복습 결과',place?placePath(place):'#menu')+`<div class="result-score"><strong>${Math.round(correct/session.questions.length*100)}점</strong><p>${session.questions.length}문제 중 ${correct}개 정답</p></div><h2>틀린 ${wrong.some(e=>e.type!=='word')?'항목':'단어'} ${wrong.length}개</h2><div class="list">${wrong.map(card).join('')||'<p class="muted">모두 맞혔어요. 잘하셨어요!</p>'}</div><p id="speech-status" role="status" class="muted"></p><div class="study-actions">${wrong.length?(place?`<button class="secondary" data-place-quiz="${place.id}" data-place-wrong>틀린 것 다시 풀기</button>`:'<button class="secondary" data-review-wrong>틀린 단어 다시 보기</button>'):''}<button class="secondary" data-retry>다시 풀기</button>${place?'<a class="primary" href="#places">다른 장소 고르기</a>':'<button class="primary" data-next-batch>다음 10개 학습</button>'}</div>`;
  }
  else if(page==='settings')html=header('설정','#home')+`<div class="settings"><section class="setting"><h2>소리</h2><p class="muted">학습 화면의 영어를 누르면 기기의 영어 음성으로 읽어줘요.</p></section><fieldset class="setting"><legend>글자 크기</legend><div class="choices">${[['normal','기본'],['large','크게']].map(([v,t])=>`<label><input type="radio" name="size" value="${v}" ${prefs.size===v?'checked':''}>${t}</label>`).join('')}</div></fieldset><fieldset class="setting"><legend>테마 설정</legend><div class="choices">${[['beige','베이지'],['white','화이트']].map(([v,t])=>`<label><input type="radio" name="theme" value="${v}" ${prefs.theme===v?'checked':''}>${t}</label>`).join('')}</div></fieldset></div>`;
  else if(page==='learn'){const e=get(sub);if(e){begin(e.type==='word'?'words:'+e.category:'daily',[e.id]);return}else html=empty('학습 목록에서 다시 선택해주세요.')}
@@ -216,7 +289,18 @@ function render(){
 }
 function handleAction(button){
  const d=button.dataset;
- if(d.begin!==undefined)begin(d.begin);
+ if(d.placeQuiz){
+  const place=places.find(item=>item.id===d.placeQuiz);
+  const ids=placeQuizIds(place).filter(id=>!('placeWrong'in d)||progress[id]?.wrong);
+  if(ids.length)begin('place:'+place.id,ids,'ko-en');
+ }
+ else if('hideMeanings'in d){
+  const hide=button.getAttribute('aria-pressed')==='false';
+  document.querySelectorAll('#place-cards .translation').forEach(meaning=>{meaning.hidden=hide});
+  button.setAttribute('aria-pressed',String(hide));
+  button.textContent=hide?'뜻 보기':'뜻 가리기';
+ }
+ else if(d.begin!==undefined)begin(d.begin);
  else if(d.speak!==undefined)speak(d.speak);
  else if(d.favorite!==undefined){favorites=favorites.includes(d.favorite)?favorites.filter(id=>id!==d.favorite):[...favorites,d.favorite];save('favorites',favorites);button.setAttribute('aria-pressed',String(favorites.includes(d.favorite)));button.setAttribute('aria-label','즐겨찾기 '+(favorites.includes(d.favorite)?'해제':'추가'))}
  else if(d.mode!==undefined)testStart(d.mode);
